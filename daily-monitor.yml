@@ -1,0 +1,39 @@
+name: Daily Website Monitor
+
+on:
+  schedule:
+    # Cron is UTC only, GitHub Actions has no timezone setting.
+    # 1:00 UTC = 8:00 AM in Hanoi (UTC+7). Adjust the hour if you want
+    # a different local time.
+    - cron: '0 1 * * *'
+  workflow_dispatch: {}   # lets you also trigger it manually from the Actions tab, for testing
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: pip install requests beautifulsoup4
+
+      - name: Run monitor
+        env:
+          GMAIL_SENDER: ${{ secrets.GMAIL_SENDER }}
+          GMAIL_RECEIVER: ${{ secrets.GMAIL_RECEIVER }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+        run: python3 testweb.py
+
+      # baselines.json must persist between runs, or every run looks like
+      # a "new URL" and nothing ever gets flagged as changed.
+      - name: Commit updated baseline
+        run: |
+          git config user.name "monitor-bot"
+          git config user.email "monitor-bot@users.noreply.github.com"
+          git add baselines.json
+          git diff --staged --quiet || git commit -m "Update baseline [skip ci]"
+          git push
